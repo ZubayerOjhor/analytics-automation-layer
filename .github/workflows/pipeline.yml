@@ -1,0 +1,33 @@
+name: pipeline
+
+# Tests and a full + incremental run on every push, and once a day on a schedule:
+# the same "runs itself" idea as a cron job or Windows Task Scheduler, visible in public.
+on:
+  push:
+  workflow_dispatch:
+  schedule:
+    - cron: "0 1 * * *"
+
+jobs:
+  run:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.11"
+      - run: pip install -r requirements.txt
+      - name: Tests
+        run: python -m unittest discover -s tests -v
+      - name: Build the synthetic source systems
+        run: python -m automation_layer generate
+      - name: First run (full load)
+        run: python -m automation_layer run
+      - name: A day passes, second run (only what changed)
+        run: |
+          python -m automation_layer next-day
+          python -m automation_layer run
+      - uses: actions/upload-artifact@v4
+        with:
+          name: weekly-report
+          path: output/

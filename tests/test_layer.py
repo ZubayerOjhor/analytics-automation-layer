@@ -1,0 +1,117 @@
+"""End-to-end tests on a throwaway copy of the synthetic sources.
+
+    python -m unittest discover -s tests -v
+"""
+import sys
+import tempfile
+import unittest
+from pathlib import Path
+
+ROOT = Path(__file__).resolve().parents[1]
+sys.path.insert(0, str(ROOT))
+
+from sqlalchemy.exc import OperationalError  # noqa: E402
+
+from automation_layer import cache, checks, config as C, deliver, extract, synthetic, transform  # noqa: E402
+
+
+class LayerTests(unittest.TestCase):
+    @classmethod
+    def setUpClass(cls):
+        cls.tmp = tempfile.TemporaryDirectory()
+        base = Path(cls.tmp.name)
+        C.SOURCES_DIR = base / "sources"
+        C.STATE_FILE = C.SOURCES_DIR / "state.json"
+        C.TARGETS_CSV = base / "lookups" / "region_targets.csv"
+        C.OUTPUT_DIR = base / "output"
+        C.SOURCE_URLS = {name: f"sqlite:///{(C.SOURCES_DIR / f'{name}.db').as_posix()}"
+                         for name in ("orders", "crm", "finance")}
+        extract.engine.cache_clear()
+        synthetic.write_sources()
+        cls.con = cache.connect(base / "cache.duckdb")
+        cls.first = cache.refresh(cls.con)
+        cls.report = transform.build(cls.con)
+
+    @classmethod
+    def tearDownClass(cls):
+        cls.con.close()
+        for source in C.SOURCE_URLS:
+            extract.engine(source).dispose()
+        cls.tmp.cleanup()
+
+    def test_1_first_run_loads_everything_and_reconciles(self):
+        recon = checks.reconcile(self.con)
+        self.assertTrue(recon["match"].all(), recon.to_string())
+        self.assertGreater(self.first["parcels"], 30_000)
+
+    def test_2_report_joins_all_three_systems_and_the_lookup_file(self):
+        hubs = self.report.hubs
+        self.assertTrue({"hub", "region", "success_rate", "target", "gap_pp", "flagged"} <= set(hubs.columns))
+        self.assertFalse(hubs["target"].isna().any())                     # lookup file joined
+        self.assertGreater(self.report.headline["revenue"], 0)            # billing system joined
+        self.assertIn("Regional 04", set(hubs.loc[hubs["flagged"], "hub"]))   # the hub the generator degrades
+
+    def test_3_order_drop_trigger_respects_the_minimum_volume(self):
+        flagged = self.report.merchants[self.report.merchants["flagged"]]
+        self.assertGreater(len(flagged), 0)
+        self.assertTrue((flagged["orders_last_week"] >= C.MERCHANT_MIN_ORDERS).all())
+        self.assertTrue((flagged["change_pct"] <= -C.MERCHANT_DROP_PCT).all())
+
+    def test_4_cross_system_check_finds_the_billing_gap(self):
+        q = checks.quality(self.con, self.report.as_of).set_index("check")
+        self.assertGreater(q.loc["Closed parcel with no invoice (billing gap)", "issues"], 0)
+        self.assertEqual(q.loc["Invoice for a parcel the operations system does not have", "issues"], 0)
+
+    def test_5_delivery_writes_excel_dashboard_and_brief(self):
+        recon = checks.reconcile(self.con)
+        result = deliver.deliver(self.report, checks.quality(self.con, self.report.as_of), recon)
+        for name in ("weekly_report.xlsx", "dashboard.html", "brief.txt"):
+            self.assertTrue((C.OUTPUT_DIR / name).stat().st_size > 0, name)
+        self.assertIn("dry run", result["telegram"])                      # no token in tests: never sends
+        self.assertIn("Weekly brief", (C.OUTPUT_DIR / "brief.txt").read_text(encoding="utf-8"))
+        self.assertIn("<svg", (C.OUTPUT_DIR / "dashboard.html").read_text(encoding="utf-8"))
+
+    def test_6_reconciliation_blocks_a_run_when_the_cache_drifts(self):
+        self.con.execute("BEGIN")
+        self.con.execute("DELETE FROM invoices WHERE parcel_id = (SELECT MIN(parcel_id) FROM invoices)")
+        try:
+            with self.assertRaises(checks.ReconciliationError):
+                checks.require_reconciled(checks.reconcile(self.con))
+        finally:
+            self.con.execute("ROLLBACK")
+
+    def test_7_next_day_pulls_only_what_changed(self):
+        before = self.con.execute("SELECT COUNT(*) FROM parcels").fetchone()[0]
+        for source in C.SOURCE_URLS:
+            extract.engine(source).dispose()
+        synthetic.advance(1)
+        pulled = cache.refresh(self.con)
+        self.assertLess(pulled["parcels"], before * 0.10)                 # a day's changes, not a reload
+        self.assertGreater(pulled["parcels"], 0)
+        self.assertEqual(pulled["hubs"], 0)
+        self.assertTrue(checks.reconcile(self.con)["match"].all())
+
+
+class RetryTests(unittest.TestCase):
+    def test_retries_then_succeeds(self):
+        calls = []
+
+        def flaky():
+            calls.append(1)
+            if len(calls) < 3:
+                raise OperationalError("select 1", {}, Exception("connection dropped"))
+            return "ok"
+
+        self.assertEqual(extract.with_retry(flaky, attempts=3, wait=0), "ok")
+        self.assertEqual(len(calls), 3)
+
+    def test_gives_up_after_the_last_attempt(self):
+        def down():
+            raise OperationalError("select 1", {}, Exception("still down"))
+
+        with self.assertRaises(OperationalError):
+            extract.with_retry(down, attempts=2, wait=0)
+
+
+if __name__ == "__main__":
+    unittest.main()

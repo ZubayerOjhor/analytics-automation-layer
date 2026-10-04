@@ -1,0 +1,8 @@
+Weekly brief | 23 Feb - 01 Mar 2026
+Parcels created: 5,438 (+0.3% WoW)
+Success rate: 85.6% (+0.3pp WoW)
+Revenue: 397,395 (-0.1% WoW), unpaid 30,336
+Active merchants: 283 (+6 WoW)
+Flags: 2 hubs below target, 13 merchants with a 30%+ order drop
+Worst hub: Regional 04 at 61.8% (target 79%)
+Checks: reconciliation 5/5 passed; 164 closed parcels have no invoice

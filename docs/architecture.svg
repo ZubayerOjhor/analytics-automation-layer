@@ -1,0 +1,39 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 980 430" font-family="system-ui, -apple-system, 'Segoe UI', sans-serif" role="img" aria-label="Three separate source systems feed a Python automation layer that joins, caches and checks the data, then delivers reports">
+  <defs>
+    <marker id="a" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="7" markerHeight="7" orient="auto"><path d="M0 0L10 5L0 10z" fill="#7B86A2"/></marker>
+  </defs>
+  <rect width="980" height="430" rx="18" fill="#F2F4F9"/>
+
+  <text x="40" y="44" font-size="13" font-weight="700" fill="#7B86A2" letter-spacing="1.5">SEPARATE SYSTEMS</text>
+  <g font-size="15" fill="#14213D">
+    <rect x="40" y="62" width="200" height="62" rx="12" fill="#fff" stroke="#E4E8F1"/><text x="58" y="88" font-weight="700">Operations database</text><text x="58" y="109" font-size="13" fill="#5F6B85">parcels</text>
+    <rect x="40" y="138" width="200" height="62" rx="12" fill="#fff" stroke="#E4E8F1"/><text x="58" y="164" font-weight="700">CRM database</text><text x="58" y="185" font-size="13" fill="#5F6B85">merchants, hubs</text>
+    <rect x="40" y="214" width="200" height="62" rx="12" fill="#fff" stroke="#E4E8F1"/><text x="58" y="240" font-weight="700">Billing database</text><text x="58" y="261" font-size="13" fill="#5F6B85">invoices</text>
+    <rect x="40" y="290" width="200" height="62" rx="12" fill="#fff" stroke="#E4E8F1"/><text x="58" y="316" font-weight="700">Business lookup file</text><text x="58" y="337" font-size="13" fill="#5F6B85">targets (sheet / CSV)</text>
+  </g>
+  <g stroke="#7B86A2" stroke-width="1.6" fill="none" marker-end="url(#a)">
+    <path d="M240 93H300"/><path d="M240 169H300"/><path d="M240 245H300"/><path d="M240 321H300"/>
+  </g>
+
+  <rect x="304" y="34" width="372" height="362" rx="16" fill="#14213D"/>
+  <text x="328" y="66" font-size="13" font-weight="700" fill="#F2A007" letter-spacing="1.5">PYTHON AUTOMATION LAYER</text>
+  <g font-size="15" fill="#fff">
+    <rect x="328" y="82" width="324" height="50" rx="10" fill="#22335c"/><text x="344" y="104" font-weight="700">1  Extract</text><text x="344" y="122" font-size="12.5" fill="#B8C2DB">only rows changed since the last run, with retries</text>
+    <rect x="328" y="142" width="324" height="50" rx="10" fill="#22335c"/><text x="344" y="164" font-weight="700">2  Cache</text><text x="344" y="182" font-size="12.5" fill="#B8C2DB">upsert into a local DuckDB file</text>
+    <rect x="328" y="202" width="324" height="50" rx="10" fill="#22335c"/><text x="344" y="224" font-weight="700">3  Reconcile</text><text x="344" y="242" font-size="12.5" fill="#B8C2DB">cache must equal the sources, or nothing ships</text>
+    <rect x="328" y="262" width="324" height="50" rx="10" fill="#22335c"/><text x="344" y="284" font-weight="700">4  Join and build</text><text x="344" y="302" font-size="12.5" fill="#B8C2DB">one query across every system, plus triggers</text>
+    <rect x="328" y="322" width="324" height="50" rx="10" fill="#22335c"/><text x="344" y="344" font-weight="700">5  Check and record</text><text x="344" y="362" font-size="12.5" fill="#B8C2DB">cross-system data checks, run history, logs</text>
+  </g>
+  <g stroke="#7B86A2" stroke-width="1.6" fill="none" marker-end="url(#a)">
+    <path d="M676 93H736"/><path d="M676 169H736"/><path d="M676 245H736"/><path d="M676 321H736"/>
+  </g>
+
+  <text x="740" y="44" font-size="13" font-weight="700" fill="#7B86A2" letter-spacing="1.5">DELIVERED</text>
+  <g font-size="15" fill="#14213D">
+    <rect x="740" y="62" width="200" height="62" rx="12" fill="#fff" stroke="#E4E8F1"/><text x="758" y="88" font-weight="700">Dashboard</text><text x="758" y="109" font-size="13" fill="#5F6B85">one HTML page</text>
+    <rect x="740" y="138" width="200" height="62" rx="12" fill="#fff" stroke="#E4E8F1"/><text x="758" y="164" font-weight="700">Excel report</text><text x="758" y="185" font-size="13" fill="#5F6B85">fixed folder, 5 sheets</text>
+    <rect x="740" y="214" width="200" height="62" rx="12" fill="#fff" stroke="#E4E8F1"/><text x="758" y="240" font-weight="700">Chat brief</text><text x="758" y="261" font-size="13" fill="#5F6B85">Telegram message</text>
+    <rect x="740" y="290" width="200" height="62" rx="12" fill="#fff" stroke="#E4E8F1"/><text x="758" y="316" font-weight="700">Google Sheet</text><text x="758" y="337" font-size="13" fill="#5F6B85">tabs kept up to date</text>
+  </g>
+  <text x="490" y="416" font-size="12.5" fill="#7B86A2" text-anchor="middle">Runs on a schedule (cron, Task Scheduler or GitHub Actions). All data in this repository is synthetic.</text>
+</svg>

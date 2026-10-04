@@ -1,0 +1,4 @@
+region,success_rate_target
+Metro,0.88
+Suburban,0.84
+Regional,0.79
