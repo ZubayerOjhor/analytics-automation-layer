@@ -9,6 +9,7 @@ python -m automation_layer run
 python -m automation_layer next-day
 python -m automation_layer run
 python -m automation_layer sql 01_winback_customers
+python -m automation_layer sql 02_normal_for_this_weekday
 ```
 
 The result is printed and saved to `output/sql/<name>.csv`.
@@ -16,6 +17,7 @@ The result is printed and saved to `output/sql/<name>.csv`.
 | # | Query | The question | The technique |
 |---|---|---|---|
 | 01 | [01_winback_customers.sql](01_winback_customers.sql) | The active-customer count is steady. Who left and came back underneath it? | `LAG` over each customer's own active days (gaps and islands) |
+| 02 | [02_normal_for_this_weekday.sql](02_normal_for_this_weekday.sql) | Today is down 46% on yesterday. Is that a problem, or just a Friday? | A window frame per weekday: `ROWS BETWEEN 4 PRECEDING AND 1 PRECEDING` |
 
 ## 01 · Customers who went quiet and came back
 
@@ -53,3 +55,52 @@ The same pattern, other tables:
 - **Any event stream**: gaps in sensor readings, logins or payments
 
 Change the `14` to your own definition of quiet, and replace the first CTE with your table.
+
+## 02 · Is today really worse than normal?
+
+"Down 46% on yesterday" only means something if yesterday was a fair comparison. In this dataset
+Fridays are quiet every week, so two common yardsticks raise an alarm every Friday:
+
+- **Yesterday** is a different weekday.
+- **The last 7 days** average six ordinary days and one quiet one.
+
+A fair baseline is the same weekday in the weeks before it:
+
+```sql
+AVG(orders) OVER (
+  PARTITION BY EXTRACT(dow FROM day)          -- Fridays with Fridays
+  ORDER BY day
+  ROWS BETWEEN 4 PRECEDING AND 1 PRECEDING    -- the last four, never today itself
+)
+```
+
+Three details carry it:
+
+1. **`PARTITION BY` the weekday**, so each day is compared with its own kind.
+2. **The frame ends at `1 PRECEDING`.** If it included the current row, a bad day would pull its
+   own baseline down and partly hide itself.
+3. **Four weeks, not one.** Comparing only with last week makes one odd week the yardstick.
+
+On the synthetic data, Friday 27 February had 445 orders
+([output/sql/02_normal_for_this_weekday.csv](../output/sql/02_normal_for_this_weekday.csv)):
+
+```
+compared with            baseline   difference
+yesterday (Thursday)        823       -45.9%
+the last 7 days             781.4     -43.1%
+the last four Fridays       445.5      -0.1%
+```
+
+Over the 31 days that have a full baseline, a "20% below normal" rule fires four times under each
+of the first two yardsticks, every time on a Friday, and not once under the third.
+
+One caution: `ROWS` counts rows, not dates. The frame is only right when there is one row per day
+with no days missing, so sparse data needs a calendar to join to first.
+
+The same pattern, other tables:
+
+- **Retail and restaurants**: weekend peaks that are not growth, Monday dips that are not decline
+- **Support**: ticket volume by weekday, so a normal Monday is not escalated
+- **Web and apps**: traffic and sign-ups with weekly cycles
+- **Finance**: payment volumes around month ends (partition by day of month instead)
+- **Operations**: per-site or per-region baselines, by adding the site to `PARTITION BY`

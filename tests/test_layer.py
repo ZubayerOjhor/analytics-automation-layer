@@ -5,6 +5,7 @@
 import sys
 import tempfile
 import unittest
+from datetime import datetime, timedelta
 from pathlib import Path
 
 ROOT = Path(__file__).resolve().parents[1]
@@ -130,6 +131,23 @@ class SqlNotebookTests(unittest.TestCase):
         row = out.iloc[0]
         self.assertEqual((int(row["customer_id"]), int(row["days_silent"])), (1, 20))
         self.assertEqual(str(row["went_quiet_on"])[:10], "2026-01-05")
+        con.close()
+    def test_weekday_baseline_ignores_the_weekly_dip_and_catches_a_real_one(self):
+        start = datetime(2026, 1, 5, 10)                        # a Monday
+        rows = []
+        for d in range(42):                                     # six weeks: 10 a day, 5 on Fridays
+            day = start + timedelta(days=d)
+            n = 5 if day.weekday() == 4 or d == 38 else 10      # day 38, a Thursday, really does halve
+            rows += [(1, day)] * n
+        con = duckdb.connect()
+        con.execute("CREATE TABLE parcels (merchant_id INTEGER, created_at TIMESTAMP)")
+        con.executemany("INSERT INTO parcels VALUES (?, ?)", rows)
+        out = sqlbook.run(con, "02_normal_for_this_weekday", save=False)
+        out.index = out["day"].astype(str).str[:10]
+        self.assertEqual(len(out), 14)                          # only days with four earlier weeks
+        friday = out.loc["2026-02-06"]                          # an ordinary quiet Friday
+        self.assertEqual((friday["vs_yesterday_pct"], friday["vs_same_weekday_pct"]), (-50.0, 0.0))
+        self.assertEqual(out.loc["2026-02-12", "vs_same_weekday_pct"], -50.0)   # the real drop
         con.close()
 
 

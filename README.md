@@ -91,19 +91,22 @@ Queries that answer what a plain `GROUP BY` cannot, each one runnable on the cac
 
 ```bash
 python -m automation_layer sql 01_winback_customers
+python -m automation_layer sql 02_normal_for_this_weekday
 ```
 
 | # | Query | The question | The technique |
 |---|---|---|---|
 | 01 | [Customers who went quiet and came back](sql/01_winback_customers.sql) | The active-customer count is steady. Who left and returned underneath it? | `LAG` over each customer's own active days |
+| 02 | [Is today really worse than normal?](sql/02_normal_for_this_weekday.sql) | Today is down 46% on yesterday. Is that a problem, or just a Friday? | A window frame per weekday: `ROWS BETWEEN 4 PRECEDING AND 1 PRECEDING` |
 
 On the synthetic data, weekly active customers stay between 252 and 283, and inside that steady line
-the query finds 21 comebacks by 20 customers. Details and use cases in [sql/README.md](sql/README.md).
+query 01 finds 21 comebacks by 20 customers. Query 02 takes a Friday that is 45.9% below Thursday
+and shows it is 0.1% below a normal Friday. Details and use cases in [sql/README.md](sql/README.md).
 
 ## Treating it like production
 
 - **Version control**: one definition of each metric, changed through commits rather than `final_v2` copies.
-- **Tests**: 10 tests cover the full load, the incremental refresh, the join, the triggers, delivery, retries and the SQL notebook.
+- **Tests**: 11 tests cover the full load, the incremental refresh, the join, the triggers, delivery, retries and the SQL notebook.
 - **A hard gate**: a reconciliation mismatch raises an error before delivery (`test_6` proves it).
 - **Idempotent**: re-running never duplicates rows; the cache is upserted by primary key.
 - **Observable**: `logs/run.log` plus `output/run_history.csv`.
@@ -136,7 +139,7 @@ deliberate trade for something an analyst can build, read and own.
 
 ```
 automation_layer/   synthetic.py  extract.py  cache.py  transform.py  checks.py  deliver.py  pipeline.py  sqlbook.py
-sql/                01_winback_customers.sql   README.md
+sql/                01_winback_customers.sql   02_normal_for_this_weekday.sql   README.md
 tests/              test_layer.py
 data/               lookups/region_targets.csv   samples/*.csv (300-row extracts of each source table)
 output/             results of the two runs above
