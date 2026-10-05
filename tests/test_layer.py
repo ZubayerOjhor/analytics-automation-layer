@@ -12,7 +12,9 @@ sys.path.insert(0, str(ROOT))
 
 from sqlalchemy.exc import OperationalError  # noqa: E402
 
-from automation_layer import cache, checks, config as C, deliver, extract, synthetic, transform  # noqa: E402
+import duckdb  # noqa: E402
+
+from automation_layer import cache, checks, config as C, deliver, extract, sqlbook, synthetic, transform  # noqa: E402
 
 
 class LayerTests(unittest.TestCase):
@@ -111,6 +113,24 @@ class RetryTests(unittest.TestCase):
 
         with self.assertRaises(OperationalError):
             extract.with_retry(down, attempts=2, wait=0)
+
+
+class SqlNotebookTests(unittest.TestCase):
+    def test_winback_finds_only_the_long_silence(self):
+        con = duckdb.connect()
+        con.execute("CREATE TABLE parcels (merchant_id INTEGER, created_at TIMESTAMP)")
+        con.execute("""INSERT INTO parcels VALUES
+            (1, '2026-01-01 09:00'), (1, '2026-01-01 15:00'),   -- two orders, one active day
+            (1, '2026-01-05 10:00'),                            -- 4 days: not quiet
+            (1, '2026-01-25 10:00'),                            -- 20 days: a comeback
+            (2, '2026-01-01 10:00'), (2, '2026-01-14 10:00'),   -- 13 days: just under the line
+            (3, '2026-01-10 10:00')                             -- a single day: nothing to compare""")
+        out = sqlbook.run(con, "01_winback_customers", save=False)
+        self.assertEqual(len(out), 1)
+        row = out.iloc[0]
+        self.assertEqual((int(row["customer_id"]), int(row["days_silent"])), (1, 20))
+        self.assertEqual(str(row["went_quiet_on"])[:10], "2026-01-05")
+        con.close()
 
 
 if __name__ == "__main__":

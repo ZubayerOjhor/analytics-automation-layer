@@ -85,10 +85,25 @@ weeks, six large merchants cut their volume (the rest of the flagged list is ord
 and 0.4% of closed parcels are never invoiced. The
 last one is only visible once operations and billing data sit side by side.
 
+## SQL notebook
+
+Queries that answer what a plain `GROUP BY` cannot, each one runnable on the cache this project builds:
+
+```bash
+python -m automation_layer sql 01_winback_customers
+```
+
+| # | Query | The question | The technique |
+|---|---|---|---|
+| 01 | [Customers who went quiet and came back](sql/01_winback_customers.sql) | The active-customer count is steady. Who left and returned underneath it? | `LAG` over each customer's own active days |
+
+On the synthetic data, weekly active customers stay between 252 and 283, and inside that steady line
+the query finds 21 comebacks by 20 customers. Details and use cases in [sql/README.md](sql/README.md).
+
 ## Treating it like production
 
 - **Version control**: one definition of each metric, changed through commits rather than `final_v2` copies.
-- **Tests**: 9 tests cover the full load, the incremental refresh, the join, the triggers, delivery and retries.
+- **Tests**: 10 tests cover the full load, the incremental refresh, the join, the triggers, delivery, retries and the SQL notebook.
 - **A hard gate**: a reconciliation mismatch raises an error before delivery (`test_6` proves it).
 - **Idempotent**: re-running never duplicates rows; the cache is upserted by primary key.
 - **Observable**: `logs/run.log` plus `output/run_history.csv`.
@@ -120,7 +135,8 @@ deliberate trade for something an analyst can build, read and own.
 ## Layout
 
 ```
-automation_layer/   synthetic.py  extract.py  cache.py  transform.py  checks.py  deliver.py  pipeline.py
+automation_layer/   synthetic.py  extract.py  cache.py  transform.py  checks.py  deliver.py  pipeline.py  sqlbook.py
+sql/                01_winback_customers.sql   README.md
 tests/              test_layer.py
 data/               lookups/region_targets.csv   samples/*.csv (300-row extracts of each source table)
 output/             results of the two runs above

@@ -4,12 +4,13 @@
     python -m automation_layer run          refresh, check, build and deliver the weekly report
     python -m automation_layer next-day     move the source systems forward one day
     python -m automation_layer status       what the cache holds and when it last changed
+    python -m automation_layer sql NAME     run a query from the sql/ folder against the cache
 """
 from __future__ import annotations
 
 import argparse
 
-from . import cache, config as C, pipeline, synthetic
+from . import cache, config as C, pipeline, sqlbook, synthetic
 
 
 def main() -> None:
@@ -23,6 +24,8 @@ def main() -> None:
     n = sub.add_parser("next-day", help="Advance the source systems")
     n.add_argument("--days", type=int, default=1)
     sub.add_parser("status", help="Show the cache contents")
+    q = sub.add_parser("sql", help="Run a query from the sql/ folder")
+    q.add_argument("name", nargs="?", help="File name without .sql; leave empty to list them")
     args = ap.parse_args()
 
     if args.cmd == "generate":
@@ -40,6 +43,13 @@ def main() -> None:
         for table in cache.SCHEMA:
             n_rows = con.execute(f"SELECT COUNT(*) FROM {table}").fetchone()[0]
             print(f"{table:10s} {n_rows:>8,} rows   last change seen: {cache.watermark(con, table)}")
+    elif args.cmd == "sql":
+        if not args.name:
+            print(*sqlbook.available(), sep="\n")
+            return
+        df = sqlbook.run(cache.connect(), args.name)
+        print(df.to_string(index=False))
+        print(f"\n{len(df):,} rows -> {C.OUTPUT_DIR / 'sql' / (args.name + '.csv')}")
 
 
 if __name__ == "__main__":
