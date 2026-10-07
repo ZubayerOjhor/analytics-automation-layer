@@ -149,6 +149,25 @@ class SqlNotebookTests(unittest.TestCase):
         self.assertEqual((friday["vs_yesterday_pct"], friday["vs_same_weekday_pct"]), (-50.0, 0.0))
         self.assertEqual(out.loc["2026-02-12", "vs_same_weekday_pct"], -50.0)   # the real drop
         con.close()
+    def test_working_days_skip_the_day_off_and_the_holiday(self):
+        con = duckdb.connect()
+        con.execute("CREATE TABLE hubs (hub_id INTEGER, region VARCHAR)")
+        con.execute("CREATE TABLE parcels (parcel_id INTEGER, hub_id INTEGER, created_at TIMESTAMP, closed_at TIMESTAMP)")
+        con.execute("INSERT INTO hubs VALUES (1, 'North')")
+        con.execute("""INSERT INTO parcels VALUES
+            (1, 1, '2026-01-07 10:00', '2026-01-12 10:00'),   -- Wed to Mon: 5 calendar, 4 working (one Friday)
+            (2, 1, '2026-01-08 10:00', '2026-01-12 10:00'),   -- Thu to Mon: 4 calendar, 3 working
+            (3, 1, '2026-01-26 10:00', '2026-01-30 10:00'),   -- Mon to Fri: 4 calendar, 2 working (holiday + Friday)
+            (4, 1, '2026-01-13 09:00', '2026-01-13 17:00'),   -- same day: 0 and 0
+            (5, 1, '2026-01-14 09:00', NULL)                  -- still open: not measured""")
+        out = sqlbook.run(con, "03_working_days_to_close", save=False)
+        self.assertEqual(len(out), 2)                           # the region and the total
+        north = out.iloc[0]
+        self.assertEqual((north["region"], int(north["orders_closed"])), ("North", 4))
+        self.assertEqual((float(north["avg_calendar_days"]), float(north["avg_working_days"])), (3.25, 2.25))
+        self.assertEqual((float(north["late_by_calendar_pct"]), float(north["late_by_working_days_pct"])), (75.0, 25.0))
+        self.assertEqual(int(north["wrongly_marked_late"]), 2)
+        con.close()
 
 
 if __name__ == "__main__":

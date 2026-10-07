@@ -31,6 +31,7 @@ jobs:
         run: |
           python -m automation_layer sql 01_winback_customers
           python -m automation_layer sql 02_normal_for_this_weekday
+          python -m automation_layer sql 03_working_days_to_close
       - uses: actions/upload-artifact@v4
         with:
           name: weekly-report

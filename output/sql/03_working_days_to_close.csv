@@ -1,0 +1,5 @@
+region,orders_closed,avg_calendar_days,avg_working_days,late_by_calendar_pct,late_by_working_days_pct,wrongly_marked_late
+Metro,23779,1.32,1.07,1.9,0.8,250
+Regional,9546,2.76,2.23,27.0,17.4,913
+Suburban,8199,1.89,1.54,10.0,5.5,363
+,41524,1.76,1.43,9.2,5.6,1526

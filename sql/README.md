@@ -10,6 +10,7 @@ python -m automation_layer next-day
 python -m automation_layer run
 python -m automation_layer sql 01_winback_customers
 python -m automation_layer sql 02_normal_for_this_weekday
+python -m automation_layer sql 03_working_days_to_close
 ```
 
 The result is printed and saved to `output/sql/<name>.csv`.
@@ -18,6 +19,7 @@ The result is printed and saved to `output/sql/<name>.csv`.
 |---|---|---|---|
 | 01 | [01_winback_customers.sql](01_winback_customers.sql) | The active-customer count is steady. Who left and came back underneath it? | `LAG` over each customer's own active days (gaps and islands) |
 | 02 | [02_normal_for_this_weekday.sql](02_normal_for_this_weekday.sql) | Today is down 46% on yesterday. Is that a problem, or just a Friday? | A window frame per weekday: `ROWS BETWEEN 4 PRECEDING AND 1 PRECEDING` |
+| 03 | [03_working_days_to_close.sql](03_working_days_to_close.sql) | The promise is 3 working days. How many orders really missed it? | A calendar per row: `CROSS JOIN LATERAL generate_series(...)` minus days off and holidays |
 
 ## 01 · Customers who went quiet and came back
 
@@ -104,3 +106,51 @@ The same pattern, other tables:
 - **Web and apps**: traffic and sign-ups with weekly cycles
 - **Finance**: payment volumes around month ends (partition by day of month instead)
 - **Operations**: per-site or per-region baselines, by adding the site to `PARTITION BY`
+
+## 03 · How many working days did it really take?
+
+A promise made in working days is usually measured in calendar days, because that is what
+`closed_on - opened_on` returns. Every weekly day off and every holiday in between is then charged
+to the team. SQL has no calendar to subtract them with, so the query builds one for each order:
+
+```sql
+CROSS JOIN LATERAL (
+  SELECT COUNT(*) AS working_days
+  FROM generate_series(o.opened_on + 1, o.closed_on, INTERVAL '1 day') AS g (day)
+  WHERE EXTRACT(dow FROM g.day) <> 5                      -- the weekly day off
+    AND g.day::date NOT IN (SELECT day FROM holidays)     -- the holidays
+) w
+```
+
+Three details carry it:
+
+1. **`generate_series`** turns two dates into one row per day in between: the calendar SQL lacks.
+2. **`LATERAL`** lets the subquery read the current order's own dates, so each order gets its own
+   calendar. A plain subquery in `FROM` cannot see the row beside it.
+3. **Holidays are data, not code.** They sit in one small list, so next year is an edit to a table,
+   not to every report.
+
+On the synthetic data (Friday is the weekly day off, plus two holidays), with a promise of
+3 working days ([output/sql/03_working_days_to_close.csv](../output/sql/03_working_days_to_close.csv)):
+
+```
+region     orders_closed  late_by_calendar  late_by_working_days  wrongly_marked_late
+Metro             23,779        1.9%               0.8%                   250
+Regional           9,546       27.0%              17.4%                   913
+Suburban           8,199       10.0%               5.5%                   363
+All               41,524        9.2%               5.6%                 1,526
+```
+
+1,526 of the 3,840 orders a calendar count marks late were inside the promise.
+
+Two cautions. The synthetic closing dates are not aware of days off, so this shows the difference
+between the two ways of measuring, not a claim about how any team works. And at large volumes a
+stored calendar table joined on a date range does the same job with less work per row.
+
+The same pattern, other tables:
+
+- **Support**: resolution-time promises that exclude weekends
+- **Banking and payments**: settlement in T+2 business days
+- **HR**: leave days taken, net of weekends and public holidays
+- **Procurement and finance**: supplier lead times and payment terms
+- **Legal and compliance**: response deadlines counted in business days
